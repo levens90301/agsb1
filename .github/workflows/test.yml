@@ -1,0 +1,72 @@
+name: Generate Commits
+
+on:
+  workflow_dispatch: # Manual trigger
+
+permissions:
+  contents: write # Ensure write access for git push
+
+jobs:
+  generate-commits:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15 # Increase timeout for 100 commits
+
+    steps:
+      # Checkout the repository
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch full history for Git operations
+
+      # Set up Node.js environment
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # Use latest stable Node.js version
+          cache: 'npm' # Cache npm dependencies
+
+      # Initialize Node.js project if package.json doesn't exist
+      - name: Initialize Node.js project
+        run: |
+          if [ ! -f package.json ]; then
+            npm init -y
+          fi
+
+      # Install dependencies
+      - name: Install dependencies
+        run: npm install moment simple-git@latest random
+
+      # Clone facebook/react and extract commit messages
+      - name: Extract commit messages
+        run: |
+          git clone https://github.com/stylus/stylus.git
+          cd stylus
+          git log --pretty="%s" -n 100 > ../commit_messages.txt
+          cd ..
+          # Clean messages: remove empty lines and messages longer than 50 characters
+          sed -i '/^$/d' commit_messages.txt
+          awk 'length($0) <= 50' commit_messages.txt > temp.txt && mv temp.txt commit_messages.txt
+          rm -rf stylus
+
+      # Configure Git for simple-git
+      - name: Configure Git
+        run: |
+          git config --global user.name "${{ github.actor }}"
+          git config --global user.email "${{ github.actor }}@outlook.com"
+          
+      # Debug Git status before running script
+      - name: Debug Git status
+        run: |
+          git config --global --list
+
+      # Run the script with redirected output
+      - name: Run index.js
+        run: node index.js
+
+
+      # Ensure all changes are pushed
+      - name: Push any remaining changes
+        run: |
+          git push origin main || echo "Push failed, checking git status"
+          git status
+          cat commit_messages.txt
